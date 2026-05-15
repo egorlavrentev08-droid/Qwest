@@ -7,7 +7,7 @@ from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-API_TOKEN = "ТВОЙ_ТОКЕН_ОТ_BOTFATHER"
+API_TOKEN = "8773046663:AAFFIQLaymzRJCP_VkIGI2hMudOAUFbroMw"
 ADMIN_CODE = "14916253649"
 BONUS_AMOUNT = 10000
 
