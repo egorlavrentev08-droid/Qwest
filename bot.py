@@ -595,20 +595,113 @@ async def joker_callback(callback: types.CallbackQuery):
     await callback.answer()
 
 # ========== РУЛЕТКА ==========
-async def roulette_animation(message, bet, bet_type, bet_value):
-    final_color = roulette_spin()
+RED_NUMBERS = {1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36}
+BLACK_NUMBERS = {2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35}
+
+# 10 кадров и их победители
+ROULETTE_FRAMES = [
+    ("🟩🟥⬛🟥⬛🟥⬛🟥⬛", "black"),   # 1 - чёрный
+    ("⬛🟩🟥⬛🟥⬛🟥⬛🟥", "red"),     # 2 - красный
+    ("🟥⬛🟩🟥⬛🟥⬛🟥⬛", "black"),   # 3 - чёрный
+    ("⬛🟥⬛🟩🟥⬛🟥⬛🟥", "red"),     # 4 - красный
+    ("🟥⬛🟥⬛🟩🟥⬛🟥⬛", "green"),   # 5 - ЗЕЛЁНЫЙ (1/37)
+    ("⬛🟥⬛🟥⬛🟩🟥⬛🟥", "black"),   # 6 - чёрный
+    ("🟥⬛🟥⬛🟥⬛🟩🟥⬛", "red"),     # 7 - красный
+    ("⬛🟥⬛🟥⬛🟥⬛🟩🟥", "black"),   # 8 - чёрный
+    ("🟥⬛🟥⬛🟥⬛🟥⬛🟩", "red"),     # 9 - красный
+    ("⬛🟥⬛🟥⬛🟥⬛🟥⬛", "black"),   # 10 - чёрный
+]
+
+def get_roulette_result():
+    """
+    Возвращает (кадр, победитель)
+    Зелёный (кадр 5) с вероятностью 1/37
+    Остальные 9 кадров с равной вероятностью
+    """
+    r = random.random()
     
+    # Зелёный с вероятностью 1/37 ≈ 0.027
+    if r < 1/37:
+        frame, winner = ROULETTE_FRAMES[4]  # 5-й кадр (индекс 4)
+        return frame, winner
+    
+    # Остальные 9 кадров с равной вероятностью
+    # 9 кадров распределены на оставшуюся вероятность (36/37)
+    else:
+        # Выбираем случайный из 9 кадров (все кроме 5-го)
+        other_frames = ROULETTE_FRAMES[:4] + ROULETTE_FRAMES[5:]
+        frame, winner = random.choice(other_frames)
+        return frame, winner
+
+def parse_roulette_bet(bet_str):
+    bet_str = bet_str.lower().strip()
+    if bet_str in ['black', 'red', 'green']:
+        return ('color', bet_str)
+    try:
+        num = int(bet_str)
+        if 0 <= num <= 36:
+            return ('number', num)
+    except:
+        pass
+    return None
+
+def check_roulette_win(winner_color, bet_type, bet_value):
+    """Проверяет выигрыш по реальному победителю"""
+    if bet_type == 'color':
+        if bet_value == 'green':
+            return (winner_color == 'green', 35)
+        return (winner_color == bet_value, 2)
+    elif bet_type == 'number':
+        num = bet_value
+        if num == 0:
+            return (winner_color == 'green', 35)
+        if num in RED_NUMBERS:
+            return (winner_color == 'red', 35)
+        elif num in BLACK_NUMBERS:
+            return (winner_color == 'black', 35)
+    return (False, 0)
+
+def generate_animation_frames(count=8):
+    """Генерирует случайные кадры для анимации (не влияют на результат)"""
     frames = []
-    for _ in range(8):
-        frames.append(generate_roulette_line())
+    for _ in range(count):
+        # Случайная линия 8-9 символов
+        length = random.choice([8, 9])
+        colors = []
+        start = random.choice(['🟥', '⬛'])
+        for i in range(length):
+            if i % 2 == 0:
+                colors.append(start)
+            else:
+                colors.append('🟥' if start == '⬛' else '⬛')
+        
+        # Иногда добавляем зелёный для красоты (не влияет на результат)
+        if random.random() < 0.3:
+            pos = random.randint(0, length-1)
+            colors[pos] = '🟩'
+        
+        line = ''.join(colors)
+        if random.choice([True, False]):
+            line = '  ' + line
+        frames.append(line)
+    return frames
+
+async def roulette_animation(message, bet, bet_type, bet_value):
+    # Получаем финальный результат
+    final_frame, winner_color = get_roulette_result()
+    
+    # Генерируем анимационные кадры
+    anim_frames = generate_animation_frames(8)
     
     msg = await message.answer(
         f"🎡 КРУТИМ РУЛЕТКУ\n\n"
         f"==========|==========\n"
-        f"{frames[0]}\n"
+        f"{anim_frames[0]}\n"
         f"==========|=========="
     )
     
+    # Анимация (8 кадров, 1 в секунду)
+    last_text = ""
     for i in range(1, 8):
         await asyncio.sleep(1.0)
         
@@ -616,46 +709,43 @@ async def roulette_animation(message, bet, bet_type, bet_value):
         new_text = (
             f"🎡 КРУТИМ РУЛЕТКУ\n\n"
             f"{bar}|{bar}\n"
-            f"{frames[i]}\n"
+            f"{anim_frames[i]}\n"
             f"{bar}|{bar}"
         )
         
-        try:
-            await msg.edit_text(new_text)
-        except:
-            pass
+        if new_text != last_text:
+            try:
+                await msg.edit_text(new_text)
+                last_text = new_text
+            except:
+                pass
     
-    if final_color == 'red':
-        color_emoji = '🔴'
-        color_text = 'RED'
-    elif final_color == 'black':
-        color_emoji = '⚫️'
-        color_text = 'BLACK'
-    else:
-        color_emoji = '🟢'
-        color_text = 'GREEN'
+    # Показываем финальный кадр
+    emoji = '🔴' if winner_color == 'red' else '⚫️' if winner_color == 'black' else '🟢'
+    color_text = winner_color.upper()
     
     final_display = (
         f"🎡 СТОП!\n\n"
         f"==========|==========\n"
-        f"{generate_roulette_line()}\n"
+        f"{final_frame}\n"
         f"==========|==========\n\n"
-        f"🎲 ВЫПАЛО: {color_emoji} {color_text}"
+        f"🎲 ВЫПАЛО: {emoji} {color_text}"
     )
     
     try:
         await msg.edit_text(final_display)
     except:
-        await msg.edit_text(final_display)
+        pass
     
     await asyncio.sleep(1)
     
-    is_win, multiplier = check_roulette_win(final_color, bet_type, bet_value)
+    # Проверяем выигрыш
+    is_win, multiplier = check_roulette_win(winner_color, bet_type, bet_value)
     
     if is_win:
         win_amount = bet * multiplier
         new_balance = update_balance(message.from_user.id, win_amount - bet)
-        add_roulette_log(message.from_user.id, final_color, win_amount)
+        add_roulette_log(message.from_user.id, winner_color, win_amount)
         await message.answer(
             f"🎉 **ПОБЕДА!** 🎉\n\n"
             f"Ставка: {bet:.2f}₽\n"
@@ -714,10 +804,7 @@ async def cmd_roulette(message: types.Message):
         await message.answer("❌ Ставка должна быть числом!")
     except Exception as e:
         await message.answer(f"❌ Ошибка: {str(e)}")
-
-@dp.callback_query(lambda c: c.data == "noop")
-async def noop_callback(callback: types.CallbackQuery):
-    await callback.answer()
+    
 
 # ========== ЗАПУСК ==========
 async def main():
